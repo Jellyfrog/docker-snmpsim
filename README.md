@@ -1,39 +1,60 @@
 # SNMP Simulator
 
-This docker image starts up snmpsim and now bundles a PySNMP-based trap/inform
-monitor inspired by `snmpreceiver/snmptrapd.py`.
+This repository builds two images from one Dockerfile:
 
-Map the UDP ports `161` (agent) **and** `162` (trap receiver) to the desired host
-ports.
+* `ghcr.io/lextudio/docker-snmpsim` – snmpsim, listening on UDP port `1161`.
+* `ghcr.io/lextudio/docker-snmpsim-snmptrapd` – a PySNMP-based trap/inform
+  receiver inspired by `snmpreceiver/snmptrapd.py`, listening on UDP port `1162`.
+  Both images share the same base layers.
 
-By default this image contains an snmpwalk from `demo.snmplabs.com` under community name `demo`.
+Map the ports to the host ports you want (usually `161` and `162`).
+
+Both images are based on distroless and run as the non-root user `nonroot`
+(uid 65532). Mounted files must be readable by that user.
+
+By default the snmpsim image contains an snmpwalk from `demo.snmplabs.com` under community name `demo`.
 
 ## Usage
 
 To use your own snmpwalks you should mount a folder with snmpwalks like this:
 
     docker run -v /somewhere/with/snmpwalks:/usr/local/snmpsim/data \
-               -p 161:161/udp -p 162:162/udp \
+               -p 161:1161/udp \
                ghcr.io/lextudio/docker-snmpsim:master
 
 The filename determines the SNMP community name.
 
-If you want to run snmpsimd with more flags then you can use `EXTRA_FLAGS`, like this:
+You can also mount the whole `/usr/local/snmpsim` directory. snmpsim then reads
+both `data/` and `variation/` from it.
 
-    docker run -v /somewhere/with/snmpwalks:/usr/local/snmpsim/data \
-               -p 161:161/udp -p 162:162/udp \
-               -e EXTRA_FLAGS="--v3-user=testing --v3-auth-key=testing123" \
+To give snmpsim more flags, add them after the image name:
+
+    docker run -p 161:1161/udp \
+               ghcr.io/lextudio/docker-snmpsim:master \
+               --v3-user=testing --v3-auth-key=testing123
+
+The image always adds `--agent-udpv4-endpoint=0.0.0.0:1161`. To replace it,
+override the entrypoint with `--entrypoint /opt/venv/bin/snmpsim-command-responder`.
+
+### Read-only root filesystem
+
+Both images support a read-only root filesystem. snmpsim writes its index cache
+to `/tmp`, so mount a writable `/tmp`:
+
+    docker run --read-only --tmpfs /tmp -p 161:1161/udp \
                ghcr.io/lextudio/docker-snmpsim:master
 
-### Trap / Inform monitor controls
+The trap receiver writes nothing unless `SNMPTRAPD_LOG_FILE` is set.
 
-The `SNMPTRAPD_ENABLED` environment variable (defaults to `1`) toggles the trap
-listener. Set it to `0` or `false` to disable the helper if you only need the
-agent.
+In Kubernetes, set `readOnlyRootFilesystem: true` and mount an `emptyDir` at `/tmp`.
 
-The helper respects additional optional variables:
+### Trap / Inform receiver
 
-* `SNMPTRAPD_ADDRESS` / `SNMPTRAPD_PORT` – override the bind address/port (defaults `0.0.0.0:162`).
+    docker run -p 162:1162/udp ghcr.io/lextudio/docker-snmpsim-snmptrapd:master
+
+The receiver respects these optional variables:
+
+* `SNMPTRAPD_ADDRESS` / `SNMPTRAPD_PORT` – override the bind address/port (defaults `0.0.0.0:1162`).
 * `SNMPTRAPD_COMMUNITY` – change the community string used for accepting traps (`public` by default).
 * `SNMPTRAPD_LOG_FILE` – write trap logs to a file instead of stdout.
 * `SNMPTRAPD_LOG_LEVEL` – change log verbosity (e.g. `DEBUG`, `INFO`, ...).

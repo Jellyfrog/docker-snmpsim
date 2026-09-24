@@ -9,6 +9,7 @@ variables for configuration.
 import asyncio
 import logging
 import os
+import signal
 import sys
 from typing import List, Sequence, Tuple, Union
 
@@ -22,7 +23,7 @@ EVENT_LOOP = asyncio.new_event_loop()
 asyncio.set_event_loop(EVENT_LOOP)
 
 TRAP_ADDRESS = os.environ.get("SNMPTRAPD_ADDRESS", "0.0.0.0")
-TRAP_PORT = int(os.environ.get("SNMPTRAPD_PORT", "162"))
+TRAP_PORT = int(os.environ.get("SNMPTRAPD_PORT", "1162"))
 COMMUNITY = os.environ.get("SNMPTRAPD_COMMUNITY", "public")
 LOG_FILE = os.environ.get("SNMPTRAPD_LOG_FILE")
 LOG_LEVEL = os.environ.get("SNMPTRAPD_LOG_LEVEL", "INFO").upper()
@@ -205,6 +206,9 @@ def main() -> None:
     ntfrcv.NotificationReceiver(snmp_engine, cb_fun)
 
     snmp_engine.transport_dispatcher.job_started(1)
+
+    # As PID 1 in a container, SIGTERM is ignored unless handled.
+    signal.signal(signal.SIGTERM, signal.default_int_handler)
 
     try:
         snmp_engine.open_dispatcher()

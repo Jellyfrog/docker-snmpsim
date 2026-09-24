@@ -9,7 +9,8 @@
 #   -n, --name NAME       Container name (default: snmpsim-local)
 #   -p, --port HOST:CONTAINER
 #                        Port mapping; can be provided multiple times
-#                        (default: 1161:1161/udp 1162:1162/udp for SNMP/Traps)
+#                        (default: 161:1161/udp 162:1162/udp; the snmpsim image
+#                        listens on 1161, the snmptrapd image on 1162)
 #   -v, --volume HOST:CONTAINER
 #                        Bind mount a host path into the container; may repeat
 #   -d, --detach          Run container in background (detached)
@@ -20,7 +21,7 @@
 # Examples:
 #   ./local-run.sh -t local/snmpsim:latest
 #   ./local-run.sh -t local/snmpsim:latest -n my-snmpsim -p 1161:1161/udp -p 1162:1162/udp -d
-#   ./local-run.sh -v $(pwd)/data:/data -t local/snmpsim:latest
+#   ./local-run.sh -v $(pwd)/data:/usr/local/snmpsim/data -t local/snmpsim:latest
 
 set -euo pipefail
 
@@ -67,8 +68,8 @@ done
 
 # Default UDP port mappings commonly used by SNMP simulator
 if [[ ${#PORT_ARGS[@]} -eq 0 ]]; then
-    PORT_ARGS+=("-p" "161:161/udp")
-    PORT_ARGS+=("-p" "162:162/udp")
+    PORT_ARGS+=("-p" "161:1161/udp")
+    PORT_ARGS+=("-p" "162:1162/udp")
 fi
 
 DOCKER_RUN=(docker run --name "$NAME")

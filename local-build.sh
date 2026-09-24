@@ -5,7 +5,8 @@
 #   ./local-build.sh [options]
 #
 # Options:
-#   -t, --tag TAG         Image tag (default: local/snmpsim:latest)
+#   -t, --tag TAG         Image tag (default: local/<target>:latest)
+#   -T, --target TARGET   Dockerfile target: snmpsim or snmptrapd (default: snmpsim)
 #   -r, --registry REG    Registry prefix (e.g. myregistry.example.com/myorg)
 #   -n, --no-cache        Pass --no-cache to docker build
 #   -p, --push            Push image after successful build
@@ -13,6 +14,7 @@
 #
 # Examples:
 #   ./local-build.sh -t myimage:0.1
+#   ./local-build.sh -T snmptrapd
 #   ./local-build.sh -r myregistry.local/lex -t snmpsim:1.2 -p
 
 set -euo pipefail
@@ -20,11 +22,11 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
 DOCKERFILE="$SCRIPT_DIR/Dockerfile"
-DEFAULT_TAG="local/snmpsim:latest"
 
-TAG="${DEFAULT_TAG}"
+TAG=""
 REGISTRY=""
 NO_CACHE=""
+TARGET="snmpsim"
 PUSH="false"
 
 print_help() {
@@ -35,6 +37,8 @@ while [[ $# -gt 0 ]]; do
 	case "$1" in
 		-t|--tag)
 			TAG="$2"; shift 2;;
+		-T|--target)
+			TARGET="$2"; shift 2;;
 		-r|--registry)
 			REGISTRY="$2"; shift 2;;
 		-n|--no-cache)
@@ -54,6 +58,8 @@ if [[ ! -f "$DOCKERFILE" ]]; then
 	exit 2
 fi
 
+TAG="${TAG:-local/$TARGET:latest}"
+
 if [[ -n "$REGISTRY" ]]; then
 	FULL_TAG="${REGISTRY%/}/${TAG}"
 else
@@ -65,7 +71,7 @@ echo "Building image: $FULL_TAG"
 # Enable BuildKit for faster builds and better output
 export DOCKER_BUILDKIT=1
 
-BUILD_CMD=(docker build -t "$FULL_TAG" $NO_CACHE -f "$DOCKERFILE" "$SCRIPT_DIR")
+BUILD_CMD=(docker build --target "$TARGET" -t "$FULL_TAG" $NO_CACHE -f "$DOCKERFILE" "$SCRIPT_DIR")
 
 echo "Running: ${BUILD_CMD[*]}"
 "${BUILD_CMD[@]}"
