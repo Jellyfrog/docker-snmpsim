@@ -34,9 +34,12 @@ jobs:
       packages: write
     steps:
       - name: Prepare
-        run: echo "PLATFORM_PAIR=${PLATFORM//\//-}" >> "$GITHUB_ENV"
+        run: |
+          echo "PLATFORM_PAIR=${PLATFORM//\//-}" >> "$GITHUB_ENV"
+          echo "IMAGE=${REGISTRY}/${IMAGE_NAME,,}${SUFFIX}" >> "$GITHUB_ENV"
         env:
           PLATFORM: ${{ matrix.platform }}
+          SUFFIX: ${{ matrix.image }}
       - name: Checkout repository
         uses: actions/checkout@v7
       - name: Set up Docker Buildx
@@ -51,7 +54,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@v6
         with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}${{ matrix.image }}
+          images: ${{ env.IMAGE }}
       - name: Build and push by digest
         id: build
         uses: docker/build-push-action@v7
@@ -60,7 +63,7 @@ jobs:
           target: ${{ matrix.target }}
           platforms: ${{ matrix.platform }}
           labels: ${{ steps.meta.outputs.labels }}
-          outputs: type=image,name=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}${{ matrix.image }},push-by-digest=true,name-canonical=true,push=true
+          outputs: type=image,name=${{ env.IMAGE }},push-by-digest=true,name-canonical=true,push=true
           cache-from: type=gha,scope=${{ matrix.target }}-${{ env.PLATFORM_PAIR }}
           cache-to: type=gha,scope=${{ matrix.target }}-${{ env.PLATFORM_PAIR }},mode=max
       - name: Export digest
@@ -92,6 +95,11 @@ jobs:
       contents: read
       packages: write
     steps:
+      # Registry references must be lowercase; github.repository may not be.
+      - name: Prepare
+        run: echo "IMAGE=${REGISTRY}/${IMAGE_NAME,,}${SUFFIX}" >> "$GITHUB_ENV"
+        env:
+          SUFFIX: ${{ matrix.image }}
       - name: Download digests
         uses: actions/download-artifact@v8
         with:
@@ -110,17 +118,13 @@ jobs:
         id: meta
         uses: docker/metadata-action@v6
         with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}${{ matrix.image }}
+          images: ${{ env.IMAGE }}
       - name: Create and push manifest list
         working-directory: ${{ runner.temp }}/digests
         run: |
           docker buildx imagetools create \
             $(jq -cr '.tags | map("-t " + .) | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON") \
             $(printf "$IMAGE@sha256:%s " *)
-        env:
-          IMAGE: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}${{ matrix.image }}
       - name: Inspect image
         run: docker buildx imagetools inspect "$IMAGE:$VERSION"
-        env:
-          IMAGE: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}${{ matrix.image }}
           VERSION: ${{ steps.meta.outputs.version }}
